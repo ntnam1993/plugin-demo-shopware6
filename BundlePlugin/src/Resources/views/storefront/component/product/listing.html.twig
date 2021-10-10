@@ -1,0 +1,27 @@
+{% sw_extends "@Storefront/storefront/component/product/listing.html.twig" %}
+
+{% block element_product_listing_row %}
+    <div class="row">
+    {% for product in searchResult %}
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card training-card">
+                <div class="img-container">
+{#                    <img src="{{ product.cover.media.url }}" alt="Media image">#}
+
+                </div>
+                <div class="card-body">
+{#                    {{ dump(product) }}#}
+                    <h5 class="card-title">{{ product.translated.name }}</h5>
+                    <p class="card-text">{{ product.translated.description }}</p>
+                    <p class="card-text">
+                        {% sw_include '@Storefront/storefront/component/product/card/price-unit.html.twig' %}
+                    </p>
+                    <a href="{{ path('frontend.detail.page', {'productId': product.id}) }}" class="btn btn-primary btn-lock">
+                        Detail
+                    </a>
+                </div>
+            </div>
+        </div>
+    {% endfor %}
+    </div>
+{% endblock %}

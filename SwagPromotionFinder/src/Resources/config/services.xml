@@ -1,0 +1,38 @@
+<?xml version="1.0" ?>
+
+<container xmlns="http://symfony.com/schema/dic/services"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:schemaLocation="http://symfony.com/schema/dic/services http://symfony.com/schema/dic/services/services-1.0.xsd">
+
+    <services>
+        <service id="SwagPromotionFinder\Core\Content\PromotionFinder\PromotionDefinition">
+            <tag name="shopware.entity.definition" entity="swag_promotion" />
+        </service>
+
+        <service id="SwagPromotionFinder\Core\Api\PromotionController" public="true">
+            <argument id="product.repository" type="service" />
+            <argument id="swag_promotion.repository" type="service" />
+            <argument id="Shopware\Core\System\SystemConfig\SystemConfigService" type="service" />
+
+            <call method="setContainer">
+                <argument type="service" id="service_container" />
+            </call>
+        </service>
+
+        <service id="SwagPromotionFinder\Storefront\Subscriber\ProductsSubscriber">
+            <argument id="swag_promotion.repository" type="service" />
+            <argument id="Shopware\Core\System\SystemConfig\SystemConfigService" type="service" />
+            <tag name="kernel.event_subscriber" />
+        </service>
+
+        <service id="SwagPromotionFinder\Core\Checkout\Promotion\Cart\SwagPromotionCartProcessor">
+            <argument type="service" id="swag_promotion.repository"/>
+            <argument type="service" id="Shopware\Core\Checkout\Cart\Price\PercentagePriceCalculator"/>
+            <argument type="service" id="Shopware\Core\Checkout\Cart\Price\QuantityPriceCalculator"/>
+
+            <!-- inject after product processor (5000) -->
+            <tag name="shopware.cart.processor" priority="4500" />
+            <tag name="shopware.cart.collector" priority="4500" />
+        </service>
+    </services>
+</container>

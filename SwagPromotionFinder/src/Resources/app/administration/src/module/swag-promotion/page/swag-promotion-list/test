@@ -1,0 +1,89 @@
+{% block swag_promotion_page %}
+    <sw-page class="swag-promotion-list">
+        {% block smart_bar_actions %}
+            <template slot="smart-bar-actions">
+                <sw-button variant="primary" :routeLink="{ name: 'test.promotion.create' }">
+                    {{ $t('swag-promotion.list.addButtonText') }}
+                </sw-button>
+            </template>
+        {% endblock %}
+        <template slot="content">
+            {% block list-content %}
+                <sw-entity-listing
+                    v-if="promotions"
+                    :items="promotions"
+                    :repository="repository"
+                    :showSelection="false"
+                    :columns="columns"
+                    detailRoute="test.promotion.detail">
+                </sw-entity-listing>
+            {%  endblock %}
+        </template>
+    </sw-page>
+{% endblock %}
+
+
+import template from './list.html.twig'
+
+const { Component } = Shopware;
+const { Criteria } = Shopware.Data;
+
+Component.register('test-promotion-list', {
+    template: template,
+
+    inject: [
+        'repositoryFactory'
+    ],
+
+    data() {
+        return {
+            repository: null,
+            bundles: null
+        };
+    },
+
+    created() {
+        console.log("before created")
+        this.repository = this.repositoryFactory.create('promotion');
+
+        this.repository
+            .search(new Criteria(), Shopware.Context.api)
+            .then((result) => {
+                console.log('result from api: ', result)
+                this.promotions = result;
+            });
+    },
+
+    metaInfo() {
+        return {
+            title: this.$createTitle()
+        };
+    },
+    computed: {
+        columns: [{
+            property: 'name',
+            dataIndex: 'name',
+            label: 'column name',
+            routerLink: 'test.promotion.detail',
+            inlineEdit: 'string',
+            allowResize: true,
+            primary: true
+        }, {
+            property: 'discountRate',
+            dataIndex: 'discountRate',
+            label: 'Discountrate',
+            inlineEdit: 'number',
+            allowResize: true
+        }, {
+            property: 'startDate',
+            dataIndex: 'startDate',
+            label: 'Startdate',
+            allowResize: true
+        }, {
+            property: 'endDate',
+            dataIndex: 'endDate',
+            label: 'Enddate',
+            allowResize: true
+        }]
+    }
+});

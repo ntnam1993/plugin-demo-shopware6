@@ -1,0 +1,27 @@
+{
+    "swag-promotion": {
+        "general": {
+            "name": "Promotion",
+            "description": "Manage promotions here",
+            "title": "Promotions"
+        },
+        "list": {
+            "addButtonText": "Add promotion",
+            "columnName": "Name",
+            "columnProduct": "Product",
+            "columnDiscountRate": "Discount rate (%)",
+            "columnStartDate": "Start date",
+            "columnExpiredDate": "Expired date"
+        },
+        "detail": {
+            "nameLabel": "Name",
+            "discountRateLabel": "Discount rate (%)",
+            "productLabel": "Products",
+            "startDateLabel": "Start date",
+            "expiredDateLabel": "Expired date",
+            "cancelButtonText": "Cancel",
+            "saveButtonText": "Save",
+            "errorTitle": "Error saving the promotion"
+        }
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "swag/bundle-example",
+  "description": "Bundle Example",
+  "type": "shopware-platform-plugin",
+  "license": "MIT",
+  "authors": [
+    {
+        "name": "shopware AG",
+        "role": "Manufacturer"
+    }
+  ],
+  "autoload": {
+    "psr-4": {
+      "BundlePlugin\\": "src/"
+    }
+  },
+  "extra": {
+    "shopware-plugin-class": "BundlePlugin\\BundlePlugin",
+    "copyright": "(c) by Dungle",
+    "label": {
+      "de-DE": "Bundle Plugin",
+      "en-GB": "Bundle Plugin"
+    }
+  }
+}

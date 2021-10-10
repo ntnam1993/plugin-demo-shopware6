@@ -1,0 +1,23 @@
+{
+  "name": "SwagTemplateAdvance",
+  "author": "Shopware AG",
+  "views": [
+     "@Storefront",
+     "@Plugins",
+     "@SwagTemplateAdvance"
+  ],
+  "style": [
+    "app/storefront/src/scss/overrides.scss",
+    "app/storefront/src/scss/sticky-header.scss",
+    "@Storefront",
+    "app/storefront/src/scss/base.scss"
+  ],
+  "script": [
+    "@Storefront",
+    "app/storefront/dist/storefront/js/swag-template-advance.js"
+  ],
+  "asset": [
+    "@Storefront",
+    "app/storefront/src/assets"
+  ]
+}

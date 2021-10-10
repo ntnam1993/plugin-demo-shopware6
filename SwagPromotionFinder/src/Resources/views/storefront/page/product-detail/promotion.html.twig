@@ -1,0 +1,10 @@
+<div class="product-detail-promotion-container">
+    <h5>Promotions:</h5>
+    <ul class="promotion-menu">
+        {% for promotion in promotions %}
+            <li class="promotion-item">
+                <p>{{ promotion.name }} (Discount {{ promotion.discountRate }}%): {{ promotion.startDate }} - {{ promotion.expiredDate }}</p>
+            </li>
+        {% endfor %}
+    </ul>
+</div>

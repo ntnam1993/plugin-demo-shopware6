@@ -1,0 +1,286 @@
+<?php
+declare(strict_types=1);
+
+namespace SwagPromotionFinder\Core\Checkout\Promotion\Cart;
+
+use Shopware\Core\Checkout\Cart\Cart;
+use Shopware\Core\Checkout\Cart\CartBehavior;
+use Shopware\Core\Checkout\Cart\CartDataCollectorInterface;
+use Shopware\Core\Checkout\Cart\CartProcessorInterface;
+use Shopware\Core\Checkout\Cart\Delivery\Struct\DeliveryInformation;
+use Shopware\Core\Checkout\Cart\Delivery\Struct\DeliveryTime;
+use Shopware\Core\Checkout\Cart\LineItem\CartDataCollection;
+use Shopware\Core\Checkout\Cart\LineItem\LineItem;
+use Shopware\Core\Checkout\Cart\LineItem\LineItemCollection;
+use Shopware\Core\Checkout\Cart\LineItem\QuantityInformation;
+use Shopware\Core\Checkout\Cart\Price\PercentagePriceCalculator;
+use Shopware\Core\Checkout\Cart\Price\QuantityPriceCalculator;
+use Shopware\Core\Checkout\Cart\Price\Struct\PercentagePriceDefinition;
+use Shopware\Core\Checkout\Cart\Price\Struct\QuantityPriceDefinition;
+use Shopware\Core\Framework\DataAbstractionLayer\EntityRepositoryInterface;
+use Shopware\Core\Framework\DataAbstractionLayer\Search\Criteria;
+use Shopware\Core\System\SalesChannel\SalesChannelContext;
+use SwagPromotionFinder\Core\Content\PromotionFinder\PromotionCollection;
+use SwagPromotionFinder\Core\Content\PromotionFinder\PromotionEntity;
+
+class SwagPromotionCartProcessor implements CartProcessorInterface, CartDataCollectorInterface
+{
+    public const TYPE = 'swagpromotion';
+    public const DISCOUNT_TYPE = 'swagpromotion-discount';
+    public const DATA_KEY = 'swag_promotion-';
+
+    /**
+     * @var EntityRepositoryInterface
+     */
+    private $promotionRepository;
+
+    /**
+     * @var PercentagePriceCalculator
+     */
+    private $percentagePriceCalculator;
+
+    /**
+     * @var QuantityPriceCalculator
+     */
+    private $quantityPriceCalculator;
+
+    public function __construct(
+        EntityRepositoryInterface $promotionRepository,
+        PercentagePriceCalculator $percentagePriceCalculator,
+        QuantityPriceCalculator $quantityPriceCalculator
+    )
+    {
+        $this->promotionRepository = $promotionRepository;
+        $this->percentagePriceCalculator = $percentagePriceCalculator;
+        $this->quantityPriceCalculator = $quantityPriceCalculator;
+    }
+
+    public function collect(CartDataCollection $data, Cart $original, SalesChannelContext $context, CartBehavior $behavior): void
+    {
+
+//        dd($original->getLineItems()->filterType('swagbundle'));
+//        dd($original->getLineItems());
+
+        /** @var LineItemCollection $promotionLineItems */
+        $promotionLineItems = $original->getLineItems()->filterType(self::TYPE);
+
+        // no promotions in cart? exit
+        if (\count($promotionLineItems) === 0) {
+            return;
+        }
+
+        // fetch missing promotion information from database
+        $promotions = $this->fetchPromotions($promotionLineItems, $data, $context);
+
+        foreach ($promotions as $promotion) {
+            // ensure all line items have a data entry
+            $data->set(self::DATA_KEY . $promotion->getId(), $promotion);
+        }
+
+        foreach ($promotionLineItems as $promotionLineItem) {
+            $promotion = $data->get(self::DATA_KEY . $promotionLineItem->getReferencedId());
+
+            // enrich promotion information with quantity and delivery information
+            $this->enrichPromotion($promotionLineItem, $promotion);
+
+            // add promotion products which are not already assigned
+            $this->addMissingProducts($promotionLineItem, $promotion);
+
+            // add promotion discount if not already assigned
+            $this->addDiscount($promotionLineItem, $promotion, $context);
+        }
+    }
+
+    public function process(CartDataCollection $data, Cart $original, Cart $toCalculate, SalesChannelContext $context, CartBehavior $behavior): void
+    {
+        // collect all promotion in cart
+        /** @var LineItemCollection $promotionLineItems */
+        $promotionLineItems = $original->getLineItems()
+            ->filterType(self::TYPE);
+
+        if (\count($promotionLineItems) === 0) {
+            return;
+        }
+
+        foreach ($promotionLineItems as $promotionLineItem) {
+            // first calculate all promotion product prices
+            $this->calculateChildProductPrices($promotionLineItem, $context);
+
+            // after the product prices calculated, we can calculate the discount
+            $this->calculateDiscountPrice($promotionLineItem, $context);
+
+            // at last we have to set the total price for the root line item (the promotion)
+            $promotionLineItem->setPrice(
+                $promotionLineItem->getChildren()->getPrices()->sum()
+            );
+
+            // afterwards we can move the promotion to the new cart
+            $toCalculate->add($promotionLineItem);
+        }
+    }
+
+    /**
+     * Fetches all Promotions that are not already stored in data
+     */
+    private function fetchPromotions(LineItemCollection $promotionLineItems, CartDataCollection $data, SalesChannelContext $context): PromotionCollection
+    {
+        $promotionIds = $promotionLineItems->getReferenceIds();
+
+        $filtered = [];
+        foreach ($promotionIds as $promotionId) {
+            // If data already contains the promotion we don't need to fetch it again
+            if ($data->has(self::DATA_KEY . $promotionId)) {
+                continue;
+            }
+
+            $filtered[] = $promotionId;
+        }
+
+        $criteria = new Criteria($filtered);
+        $criteria->addAssociation('products');
+        /** @var PromotionCollection $promotions */
+        $promotions = $this->promotionRepository->search($criteria, $context->getContext())->getEntities();
+
+        return $promotions;
+    }
+
+    private function enrichPromotion(LineItem $promotionLineItem, PromotionEntity $promotion): void
+    {
+        if (!$promotionLineItem->getLabel()) {
+            $promotionLineItem->setLabel($promotion->getTranslation('name'));
+        }
+
+        $promotionProducts = $promotion->getProducts();
+        if ($promotionProducts === null) {
+            throw new \RuntimeException(sprintf('Promotion "%s" has no products', $promotion->getTranslation('name')));
+        }
+
+        $firstPromotionProduct = $promotionProducts->first();
+        if ($firstPromotionProduct === null) {
+            throw new \RuntimeException(sprintf('Promotion "%s" has no products', $promotion->getTranslation('name')));
+        }
+
+        $firstPromotionProductDeliveryTime = $firstPromotionProduct->getDeliveryTime();
+        if ($firstPromotionProductDeliveryTime !== null) {
+            $firstPromotionProductDeliveryTime = DeliveryTime::createFromEntity($firstPromotionProductDeliveryTime);
+        }
+
+        $promotionLineItem->setRemovable(true)
+            ->setStackable(true)
+            ->setDeliveryInformation(
+                new DeliveryInformation(
+                    $firstPromotionProduct->getStock(),
+                    (float)$firstPromotionProduct->getWeight(),
+                    (bool)$firstPromotionProduct->getShippingFree(),
+                    $firstPromotionProduct->getRestockTime(),
+                    $firstPromotionProductDeliveryTime
+                )
+            )
+            ->setQuantityInformation(new QuantityInformation());
+    }
+
+    private function addMissingProducts(LineItem $promotionLineItem, PromotionEntity $promotion): void
+    {
+        $promotionProducts = $promotion->getProducts();
+        if ($promotionProducts === null) {
+            throw new \RuntimeException(sprintf('Promotion %s has no products', $promotion->getTranslation('name')));
+        }
+
+        foreach ($promotionProducts->getIds() as $productId) {
+            // if the promotionLineItem already contains the product we can skip it
+            if ($promotionLineItem->getChildren()->has($productId)) {
+                continue;
+            }
+
+            // the ProductCartProcessor will enrich the product further
+            $productLineItem = new LineItem($productId, LineItem::PRODUCT_LINE_ITEM_TYPE, $productId);
+
+            $promotionLineItem->addChild($productLineItem);
+        }
+    }
+
+    private function addDiscount(LineItem $promotionLineItem, PromotionEntity $promotion, SalesChannelContext $context): void
+    {
+        if ($this->getDiscount($promotionLineItem)) {
+            return;
+        }
+
+        $discount = $this->createDiscount($promotion, $context);
+
+        if ($discount) {
+            $promotionLineItem->addChild($discount);
+        }
+    }
+
+    private function getDiscount(LineItem $promotion): ?LineItem
+    {
+        return $promotion->getChildren()->get($promotion->getReferencedId() . '-discount');
+    }
+
+    private function createDiscount(PromotionEntity $promotionData, SalesChannelContext $context): ?LineItem
+    {
+        if ($promotionData->getDiscount() === 0.0) {
+            return null;
+        }
+
+        $priceDefinition = new PercentagePriceDefinition($promotionData->getDiscount() * -1, $context->getContext()->getCurrencyPrecision());
+        $label = sprintf('Percental promotion voucher (%s%%)', $promotionData->getDiscount());
+
+
+        $discount = new LineItem(
+            $promotionData->getId() . '-discount',
+            self::DISCOUNT_TYPE,
+            $promotionData->getId()
+        );
+
+        $discount->setPriceDefinition($priceDefinition)
+            ->setLabel($label)
+            ->setGood(false);
+
+        return $discount;
+    }
+
+    private function calculateChildProductPrices(LineItem $promotionLineItem, SalesChannelContext $context): void
+    {
+        /** @var LineItemCollection $products */
+        $products = $promotionLineItem->getChildren()->filterType(LineItem::PRODUCT_LINE_ITEM_TYPE);
+
+        foreach ($products as $product) {
+            $priceDefinition = $product->getPriceDefinition();
+            if ($priceDefinition === null || !$priceDefinition instanceof QuantityPriceDefinition) {
+                throw new \RuntimeException(sprintf('Product "%s" has invalid price definition', $product->getLabel()));
+            }
+
+            $product->setPrice(
+                $this->quantityPriceCalculator->calculate($priceDefinition, $context)
+            );
+        }
+    }
+
+    private function calculateDiscountPrice(LineItem $promotionLineItem, SalesChannelContext $context): void
+    {
+        $discount = $this->getDiscount($promotionLineItem);
+
+        if (!$discount) {
+            return;
+        }
+
+        $childPrices = $promotionLineItem->getChildren()
+            ->filterType(LineItem::PRODUCT_LINE_ITEM_TYPE)
+            ->getPrices();
+
+        $priceDefinition = $discount->getPriceDefinition();
+
+        if (!$priceDefinition) {
+            return;
+        }
+
+        $price = $this->percentagePriceCalculator->calculate(
+            $priceDefinition->getPercentage(),
+            $childPrices,
+            $context
+        );
+
+        $discount->setPrice($price);
+    }
+}

@@ -1,0 +1,22 @@
+.training-card {
+    border: 1px solid $border-color;
+    margin-bottom: 20px;
+    background-color: $cardColor;
+
+    .img-container {
+        height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 10px;
+
+        img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+    }
+
+    .card-body {
+        padding: 20px;
+    }
+}

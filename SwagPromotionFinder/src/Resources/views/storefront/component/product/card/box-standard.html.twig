@@ -1,0 +1,7 @@
+{% sw_extends '@Storefront/storefront/component/product/card/box-standard.html.twig' %}
+
+{% block component_product_box_variant_characteristics %}
+    {% if product.extensions.promotion.elements %}
+        <h5 class="badge badge-danger">Promoted</h5>
+    {% endif %}
+{%  endblock %}

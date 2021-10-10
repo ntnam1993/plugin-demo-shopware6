@@ -1,0 +1,18 @@
+{
+  "name": "swag/theme-template",
+  "description": "Theme theme plugin",
+  "type": "shopware-platform-plugin",
+  "license": "MIT",
+  "autoload": {
+    "psr-4": {
+      "Swagtemplate\\": "src/"
+    }
+  },
+  "extra": {
+    "shopware-plugin-class": "Swagtemplate\\Swagtemplate",
+    "label": {
+      "de-DE": "Swagtemplate",
+      "en-GB": "Swagtemplate"
+    }
+  }
+}
